@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html>
+<header>
+    <title>face detection</title>
+</header>
+
+<body>
+    <video width="640" height="480"></video>
+    <canvas width="640" height="480"></canvas>
+    <p>
+        <button id="start" style="width:80px;height:25px;">open</button>
+        <button id="snap" style="width:80px;height:25px;">clip</button>
+        <button id="close" style="width:80px;height:25px;">close</button>
+    </p>
+    <!-- <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.min.js"></script> -->
+    <!-- <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.es5.min.js"></script>  -->
+    <!-- <script src="https://cdn.jsdelivr.net/npm/onnxruntime-web/dist/ort.webgl.min.js"></script>  -->
+    <!-- <script src="https://cdn.jsdelivr.net/npm/onnxjs@0.1.8/dist/onnx.min.js"></script>  -->
+    <script src='js/ort.min.js'></script>
+    <script src="js/opencv.js"></script>
+    <script>
+        var canvas = document.getElementsByTagName('canvas')[0],
+            context = canvas.getContext('2d'),
+            video = document.getElementsByTagName("video")[0],
+            snap = document.getElementById("snap"),
+            close = document.getElementById("close"),
+            start = document.getElementById("start"),
+            MediaStreamTrack,
+            session_face,
+            session_facepoints98,
+            cv2;
+        var img_size = [640, 480];//图像尺寸
+        var scaled_size = [128, 128];//缩放后尺寸
+        var img_hat = new Image();
+        img_hat.src = "./img/hat.png";
+        var init_model = async function () { //初始化识别引擎，加载onnx模型，初始化opencv
+            options_cpu = {
+                executionProviders: ['wasm'],
+            };
+            session_face = await ort.InferenceSession.create('./weights/face.onnx', options_cpu); //加载人脸检测模型
+            session_facepoints98 = await ort.InferenceSession.create('./weights/facepoint98_lite_sim.onnx', options_cpu); //加载关键点识别模型,wasm-ms,webgl-50ms
+            cv2 = await cv; //加载opencv
+        }
+        var anchors = get_anchors([scaled_size[1], scaled_size[0]]) //预选框
+        var detect = async function () { //单帧检测
+            try {
+
+                var frame_rgba = cv2.imread(canvas); //获取图像-cpu8%
+                let w = img_size[0], h = img_size[1];
+                const scale = [w, h, w, h];
+                let scale_for_landmarks = [w, h, w, h, w, h, w, h, w, h];
+                let point_color = new cv2.Scalar(255, 0, 0, 255);
+                var old_date = new Date();
+                let boxes_conf_landms = await get_face(frame_rgba);//人脸检测获取人脸框
+                if (boxes_conf_landms.length == 0) { //没有检测到面部
+                    return;
+                }
+                let keypoints_list = [];
+                for (let i = 0; i < boxes_conf_landms.length; i++) {
+                    var score = boxes_conf_landms[i][4];
+                    if (score < 0.95 && boxes_conf_landms.length > 1) { //出现多人需要置信度超过0.9
+                        continue;
+                    }
+                    for (let j = 0; j < 4; j++) {
+                        boxes_conf_landms[i][j] = boxes_conf_landms[i][j] * scale[j];
+                    }
+                    let rect_offsetx=(boxes_conf_landms[i][2]-boxes_conf_landms[i][0])*0.1;
+                    let rect_offsety=(boxes_conf_landms[i][3]-boxes_conf_landms[i][1])*0.1;
+                    
+                    const rect = [boxes_conf_landms[i][0]-rect_offsetx, boxes_conf_landms[i][1]-rect_offsety, boxes_conf_landms[i][2]+rect_offsetx, boxes_conf_landms[i][3]+rect_offsety];
+                    var keypoints = await get_facepoints98(frame_rgba, rect);/////////////////关键点检测  
+
+                    if (keypoints.length > 0) {
+                        const angles = get_faceangle(keypoints);
+                        keypoints_list.push([keypoints, angles[2]]);
+                        var color = new cv2.Scalar(0, 255, 0);
+                        var new_date = new Date();
+
+                        cv2.putText(frame_rgba, "yaw:" + angles[0].toString(), new cv2.Point(10, 20), cv2.FONT_HERSHEY_PLAIN, 1, color, 2);
+                        cv2.putText(frame_rgba, "pitch:" + angles[1].toString(), new cv2.Point(10, 40), cv2.FONT_HERSHEY_PLAIN, 1, color, 2);
+                        cv2.putText(frame_rgba, "roll:" + angles[2].toString(), new cv2.Point(10, 60), cv2.FONT_HERSHEY_PLAIN, 1, color, 2);
+                    }
+                    cv2.rectangle(frame_rgba, new cv2.Point(rect[0], rect[1]), new cv2.Point(rect[2], rect[3]), new cv2.Scalar(0, 255, 0, 255), 1);
+                }
+                let fps = parseInt(1000 / (new_date - old_date));
+                cv2.putText(frame_rgba, "fps:" + fps.toString(), new cv2.Point(10, 80), cv2.FONT_HERSHEY_PLAIN, 1, new cv2.Scalar(0, 255, 0), 2);
+                for (let p in keypoints) {
+                    cv2.circle(frame_rgba, new cv2.Point(keypoints[p][0], keypoints[p][1]), 1, point_color, -1);
+                }
+                if (boxes_conf_landms.length > 0) cv2.imshow(canvas, frame_rgba);
+                for (let key in keypoints_list) { //可能检测到多个人脸
+                    add_decoration(keypoints_list[key][0], keypoints_list[key][1]); //为每个人脸添加帽子-这个函数需要重写，支持配置文件
+                }
+            }
+            catch (ex) {
+                console.log(ex);
+            }
+            finally {
+                if (frame_rgba) {
+                    frame_rgba.delete(); //释放资源
+                }
+            }
+        }
+        var get_face = async function (frame) { //人脸检测
+            var frame_rgba;
+            if (img_size[0] != scaled_size[0]) {
+                frame_rgba = new cv2.Mat(scaled_size[1], scaled_size[0], cv2.CV_8UC3);
+                let dsize = new cv2.Size(scaled_size[0], scaled_size[1]);
+                cv2.resize(frame, frame_rgba, dsize, 0, 0, cv2.INTER_LINEAR);
+            }
+            else {
+                frame_rgba = frame.clone();
+            }
+            let data = frame_rgba.data;
+            let new_Data = new Float32Array(3 * scaled_size[0] * scaled_size[1]);
+            let index = 0;
+            for (let i = 0; i < data.length; i += 4) { //数据预处理 cpu-30% debug-15ms
+                new_Data[index] = data[i] - 104;
+                index++;
+            }
+            for (let i = 1; i < data.length; i += 4) {
+                new_Data[index] = data[i] - 117;
+                index++;
+            }
+            for (let i = 2; i < data.length; i += 4) {
+                new_Data[index] = data[i] - 123;
+                index++;
+            }
+            let input = new ort.Tensor('float32', new_Data, [1, 3, scaled_size[1], scaled_size[0]]);
+            let feeds = { "input": input }
+            const results = await session_face.run(feeds); //retinaface 人脸检测 50ms
+            let loc = results.output.data;
+            let conf = results["514"].data;
+            let landms = results["513"].data;
+            let boxes = decode_np(loc, anchors, [0.1, 0.2]);
+            // landms = decode_landm(landms, anchors, [0.1, 0.2]); #5个关键点
+            boxes_conf_landms = [];
+            for (let i = 0; i < boxes.length; i++) {
+                boxes_conf_landms.push([boxes[i][0], boxes[i][1], boxes[i][2], boxes[i][3], conf[i * 2 + 1]]);
+            }
+            boxes_conf_landms = non_max_suppression(boxes_conf_landms, 0.5) //非极大值抑制
+            delete (new_Data);
+            frame_rgba.delete(); //释放资源
+            return boxes_conf_landms;
+        }
+        var get_facepoints98 = async function (frame_rgba, rect) { //关键点检测
+            let r = [];
+            try {
+                let tmp_x = rect[0] > 0 ? rect[0] : 0;
+                let tmp_y = rect[1] > 0 ? rect[1] : 0;
+                let tmp_x2 = rect[2] > img_size[0] ? img_size[0] : rect[2];
+                let tmp_y2 = rect[3] > img_size[1] ? img_size[1] : rect[3];
+                let pad = [0, 0, 0, 0]; //left,top,right,bottom
+                if (rect[0] < 0) {
+                    pad[0] = -1 * rect[0];
+                }
+                if (rect[1] < 0) {
+                    pad[1] = -1 * rect[1];
+                }
+                if (rect[2] > img_size[0]) {
+                    pad[2] = rect[2] - img_size[0];
+                }
+                if (rect[3] > img_size[1]) {
+                    pad[3] = rect[3] - img_size[1];
+                }
+                let rect_tmp = new cv2.Rect(tmp_x, tmp_y, tmp_x2 - tmp_x, tmp_y2 - tmp_y); //面部矩形
+                frame_rgba = frame_rgba.roi(rect_tmp); //截取到的面部图像
+                var frame_rgb = new cv2.Mat(frame_rgba.rows, frame_rgba.cols, cv2.CV_8UC3);
+                cv2.cvtColor(frame_rgba, frame_rgb, cv2.COLOR_RGBA2RGB); //rgba转换成rgb
+                let pad_top = 0, pad_bottom = 0, pad_left = 0, pad_right = 0;
+                let frame_face = frame_rgb;
+                let w = frame_face.cols + pad[0] + pad[2]; //填补溢出之后的尺寸
+                let h = frame_face.rows + pad[1] + pad[3]; //填补溢出之后的尺寸
+                if (w > h) { //计算上下左右需要填充的像素尺寸，将图像填充成正方形
+                    if ((w - h) % 2 == 0) {
+                        pad_top = (w - h) / 2;
+                        pad_bottom = pad_top;
+                    }
+                    else {
+                        pad_bottom = Math.ceil((w - h) / 2);
+                        pad_top = w - h - pad_bottom;
+                    }
+                }
+                else if (w < h) {
+                    if ((h - w) % 2 == 0) {
+                        pad_left = (h - w) / 2;
+                        pad_right = pad_left;
+                    }
+                    else {
+                        pad_right = Math.ceil((h - w) / 2);
+                        pad_left = h - w - pad_right;
+                    }
+                }
+                cv2.copyMakeBorder(frame_face, frame_face, pad_top + pad[1], pad_bottom + pad[3], pad_left + pad[0], pad_right + pad[2], cv2.BORDER_CONSTANT, new cv2.Scalar(255, 255, 255))  // 图像边缘扩展
+                let max_size = frame_face.rows; //加边以后的尺寸w=h
+                cv2.resize(frame_face, frame_face, new cv2.Size(112, 112), 0, 0, cv2.INTER_CUBIC); //resize 到112 * 112
+                let new_Data = new Float32Array(37632);
+                let index = 0;
+                let data = frame_face.data;
+                for (let i = 0; i < data.length; i += 3) { //数据预处理 cpu-30% debug-15ms
+                    new_Data[index] = data[i] / 255;
+                    index++;
+                }
+                for (let i = 1; i < data.length; i += 3) {
+                    new_Data[index] = data[i] / 255;
+                    index++;
+                }
+                for (let i = 2; i < data.length; i += 3) {
+                    new_Data[index] = data[i] / 255;
+                    index++;
+                }
+                var input = new ort.Tensor('float32', new_Data, [1, 3, 112, 112]);
+                var feeds = { "input": input };
+                const results = await session_facepoints98.run(feeds); //推理关键点
+                pred = results["output"].data;
+                for (let i = 0; i < pred.length / 2; i++) {
+                    r.push([tmp_x + 1.0 * pred[i * 2] * max_size - pad_left - pad[0], tmp_y + 1.0 * pred[i * 2 + 1] * max_size - pad_top - pad[1]]);
+                }
+                delete (new_Data);
+                frame_rgb.delete();
+                frame_rgba.delete();
+            }
+            catch (ex) {
+                console.log(ex);
+            }
+            finally {
+                return r;
+            }
+        }
+        var get_faceangle = function (keypoints) { //非solvepnp面部姿态估计
+            //yaw
+            let point1 = keypoints["1"];
+            let point31 = keypoints["31"];
+            let point51 = keypoints["51"];
+            let crossover51 = point_line(point51, [point1[0], point1[1], point31[0], point31[1]]);
+            let yaw_mean = point_point(point1, point31) / 2;
+            let yaw_right = point_point(point1, crossover51);
+            let yaw = (yaw_mean - yaw_right) / yaw_mean;
+            yaw = parseInt(yaw * 71.58 + 0.7037);
+            //pitch
+            let pitch_dis = point_point(point51, crossover51);
+            if (point51[1] < crossover51[1]) {
+                pitch_dis = -pitch_dis;
+            }
+            let pitch = parseInt(1.497 * pitch_dis + 18.97);
+            //roll
+            let roll_tan = Math.abs(keypoints["60"][1] - keypoints["72"][1]) / Math.abs(keypoints["60"][0] - keypoints["72"][0]);
+            let roll = Math.atan(roll_tan);
+            roll = 1.0 * 180 * roll / Math.PI;
+            if (keypoints["60"][1] > keypoints["72"][1]) {
+                roll = -roll
+            }
+            roll = parseInt(roll);
+            return [yaw, pitch, roll];
+        }
+        var add_decoration = function (keypoints, angle) { // 添加帽子
+            angle += 10; //本身图片有负10度的偏角
+            let distance = Math.pow((Math.pow((keypoints[60][0] - keypoints[72][0]), 2) + Math.pow((keypoints[60][1] - keypoints[72][1]), 2)), 0.5);//两眼角之间的距离
+            let w = distance * 2.6; //距离乘2.6倍的系数作为帽子的宽度
+            let h = parseInt(1.0 * 300 * w / 368); //帽子高度
+            pos = getHatPos(keypoints, 1.15 * distance); //装饰图片中心点位置
+            // 设置绘制颜色
+            context.fillStyle = "#0000FF";
+            // context.fillRect(pos[0], pos[1], 4, 4); //绘制目标点-帽子中心点
+            context.translate(pos[0] - 0.2 * distance, pos[1]);
+            context.rotate(Math.PI * angle / 180);
+            context.drawImage(img_hat, 0 - w / 2, 0 - h / 2, w, h);
+            context.rotate(-Math.PI * angle / 180);
+            context.translate(0.2 * distance - pos[0], -pos[1]);
+        }
+        var getHatPos = function (keypoints, d) { //计算帽子中心点位置
+            let x1 = keypoints["51"][0];
+            let y1 = img_size[1] - keypoints["51"][1];
+            let x2 = keypoints["54"][0];
+            let y2 = img_size[1] - keypoints["54"][1];
+            let a = (y1 - y2) / (x1 - x2);
+            let b = y1 - x1 * a;
+            let m = x1;
+            let n = y1;
+            let x = 0, y = 0;
+            if (a > 0) {
+                x = m + Math.pow(Math.pow(d, 2) / (1 + Math.pow(a, 2)), 0.5);
+            }
+            else {
+                x = m - Math.pow(Math.pow(d, 2) / (1 + Math.pow(a, 2)), 0.5);
+            }
+            y = a * x + b;
+            return [x, img_size[1] - y];
+        }
+        var point_line = function (point, line) { //两点垂线
+            const x1 = line[0];
+            const y1 = line[1];
+            const x2 = line[2];
+            const y2 = line[3];
+
+            const x3 = point[0];
+            const y3 = point[1];
+
+            const k1 = (y2 - y1) * 1.0 / (x2 - x1);
+            const b1 = y1 * 1.0 - x1 * k1 * 1.0;
+            const k2 = -1.0 / k1;
+            const b2 = y3 * 1.0 - x3 * k2 * 1.0;
+            const x = (b2 - b1) * 1.0 / (k1 - k2);
+            const y = k1 * x * 1.0 + b1 * 1.0;
+            return [x, y];
+        }
+        var cross_point = function (line1, line2) { //计算两条线交点
+            var x = 0, y = 0;
+            const x1 = line1[0];
+            const y1 = line1[1];
+            const x2 = line1[2];
+            const y2 = line1[3];
+            const x3 = line2[0];
+            const y3 = line2[1];
+            const x4 = line2[2];
+            const y4 = line2[3];
+            const k1 = (y2 - y1) * 1.0 / (x2 - x1);
+            const b1 = y1 * 1.0 - x1 * k1 * 1.0;
+            var k2 = None;
+            var b2 = 0;
+
+            if ((x4 - x3) == 0) {
+                k2 = None;
+                b2 = 0;
+            }
+            else {
+                k2 = (y4 - y3) * 1.0 / (x4 - x3);
+                b2 = y3 * 1.0 - x3 * k2 * 1.0;
+            }
+            if (k2 == None) {
+                x = x3;
+            }
+            else {
+                x = (b2 - b1) * 1.0 / (k1 - k2);
+                y = k1 * x * 1.0 + b1 * 1.0;
+            }
+            return [x, y];
+        }
+        var point_point = function (point_1, point_2) { //两点之间距离
+            const x1 = point_1[0];
+            const y1 = point_1[1];
+            const x2 = point_2[0];
+            const y2 = point_2[1];
+            const distance = Math.pow((Math.pow((x1 - x2), 2) + Math.pow((y1 - y2), 2)), 0.5);
+            return distance;
+        }
+        function get_anchors(image_size) { //计算先验框
+            var min_sizes = [[16, 32], [64, 128], [256, 512]];
+            var steps = [8, 16, 32];
+            var clip = false;
+            var feature_maps = [];  //[[16, 32], [64, 128], [256, 512]]
+            for (let index in steps) {
+                let tmp = [Math.ceil(image_size[0] / steps[index]), Math.ceil(image_size[1] / steps[index])];
+                feature_maps.push(tmp);
+            }
+            let anchors = [];
+            for (let index in feature_maps) { //[16, 32]
+                let min_size = min_sizes[index];
+                let ii = feature_maps[index][0];
+                let jj = feature_maps[index][1];
+                for (let i = 0; i < ii; i++) {
+                    for (let j = 0; j < jj; j++) {
+                        for (let k = 0; k < min_size.length; k++) {
+                            let s_kx = min_size[k] / image_size[1];
+                            let s_ky = min_size[k] / image_size[0];
+                            let dense_cx = [(j + 0.5) * steps[index] / image_size[1]];
+                            let dense_cy = [(i + 0.5) * steps[index] / image_size[0]];
+                            anchors.push([dense_cx[0], dense_cy[0], s_kx, s_ky]);
+                        }
+                    }
+                }
+            }
+            return anchors;
+        }
+        var non_max_suppression = function (boxes, conf_thres = 0.5, nms_thres = 0.3) { //非极大值抑制
+            let detection = [];
+            for (let i = 0; i < boxes.length; i++) {
+                if (boxes[i][4] > conf_thres)
+                    detection.push(boxes[i])
+            }
+            detection.sort(function (x, y) {
+                return y[4] - x[4];
+            });
+            var best_box = []
+            while (detection.length > 0) {
+                best_box.push(detection[0]);
+                if (detection.length == 1) {
+                    break;
+                }
+                detection.shift();
+                ious = iou(best_box[best_box.length - 1], detection);
+                let new_boxes = [];
+                for (let i = 0; i < detection.length; i++) {
+                    if (ious[i] < nms_thres) {
+                        new_boxes.push(detection[i])
+                    }
+                }
+                detection = new_boxes;
+            }
+            return best_box;
+        }
+        var iou = function (b1, b2) { //计算iou b1:bestbox,b2:boxes
+            let result = []
+            try {
+                let [b1_x1, b1_y1, b1_x2, b1_y2] = [b1[0], b1[1], b1[2], b1[3]];
+                let [b2_x1, b2_y1, b2_x2, b2_y2] = [getCol(b2, 0), getCol(b2, 1), getCol(b2, 2), getCol(b2, 3)];
+                let inter_rect_x1 = [];
+                let inter_rect_x2 = [];
+                let inter_rect_y1 = [];
+                let inter_rect_y2 = [];
+                for (let i = 0; i < b2.length; i++) {
+                    inter_rect_x1.push(b2_x1[i] < b1_x1 ? b1_x1 : b2_x1[i]);
+                    inter_rect_y1.push(b2_y1[i] < b1_y1 ? b1_y1 : b2_y1[i]);
+                    if (b2_x2[i] > b1_x2) {
+                        let tmp = b1_x2 - inter_rect_x1[i];
+                        inter_rect_x2.push(tmp > 0 ? tmp : 0);
+                    }
+                    else {
+                        let tmp = b2_x2[i] - inter_rect_x1[i];
+                        inter_rect_x2.push(tmp > 0 ? tmp : 0);
+                    }
+                    if (b2_y2[i] > b1_y2) {
+                        let tmp = b1_y2 - inter_rect_y1[i];
+                        inter_rect_y2.push(tmp > 0 ? tmp : 0);
+                    }
+                    else {
+                        let tmp = b2_y2[i] - inter_rect_y1[i];
+                        inter_rect_y2.push(tmp > 0 ? tmp : 0);
+                    }
+                }
+                let area_b1 = (b1_x2 - b1_x1) * (b1_y2 - b1_y1);
+                for (let i = 0; i < b2_x2.length; i++) {
+                    let inter_area = inter_rect_x2[i] * inter_rect_y2[i];
+                    let tmp = 1.0 * (b2_x2[i] - b2_x1[i]) * (b2_y2[i] - b2_y1[i]) + area_b1 - inter_area;
+                    tmp = tmp > 1e-6 ? tmp : 1e-6;
+                    result.push(inter_area / tmp);
+                }
+            }
+            catch (ex) {
+                console.log(ex);
+            } finally {
+                return result;
+            }
+
+        }
+        var getCol = function (matrix, col) { //获取多维数组某列
+            var column = [];
+            for (var i = 0; i < matrix.length; i++) {
+                column.push(matrix[i][col]);
+            }
+            return column;
+        }
+        var decode_np = function (loc, priors, variances) {
+            let boxes = []
+            for (let i = 0; i < priors.length; i++) {
+                let v_0 = priors[i][0] + loc[i * 4 + 0] * variances[0] * priors[i][2];
+                let v_1 = priors[i][1] + loc[i * 4 + 1] * variances[0] * priors[i][3]
+                let v_2 = priors[i][2] * Math.exp(loc[i * 4 + 2] * variances[1]);
+                let v_3 = priors[i][3] * Math.exp(loc[i * 4 + 3] * variances[1]);
+                v_0 -= v_2 / 2;
+                v_1 -= v_3 / 2
+                v_2 += v_0
+                v_3 += v_1
+                tmp = [v_0, v_1, v_2, v_3];
+                boxes.push(tmp)
+            }
+            return boxes
+        }
+        var decode_landm = function (pre, priors, variances) {
+            let boxes = []
+            for (let i = 0; i < priors.length; i++) {
+                let v_0 = priors[i][0] + pre[i * 10 + 0] * variances[0] * priors[i][2];
+                let v_1 = priors[i][1] + pre[i * 10 + 1] * variances[0] * priors[i][3];
+
+                let v_2 = priors[i][0] + pre[i * 10 + 2] * variances[0] * priors[i][2];
+                let v_3 = priors[i][1] + pre[i * 10 + 3] * variances[0] * priors[i][3];
+
+                let v_4 = priors[i][0] + pre[i * 10 + 4] * variances[0] * priors[i][2];
+                let v_5 = priors[i][1] + pre[i * 10 + 5] * variances[0] * priors[i][3];
+
+                let v_6 = priors[i][0] + pre[i * 10 + 6] * variances[0] * priors[i][2];
+                let v_7 = priors[i][1] + pre[i * 10 + 7] * variances[0] * priors[i][3];
+
+                let v_8 = priors[i][0] + pre[i * 10 + 8] * variances[0] * priors[i][2];
+                let v_9 = priors[i][1] + pre[i * 10 + 9] * variances[0] * priors[i][3];
+
+                tmp = [v_0, v_1, v_2, v_3, v_4, v_5, v_6, v_7, v_8, v_9];
+                boxes.push(tmp)
+            }
+            return boxes
+        }
+        window.onload = function () {
+            init_model(); //加载模型
+            start.addEventListener('click', function () {
+                if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+                    navigator.mediaDevices.getUserMedia({
+                        video: true,
+                        audio: true
+                    }).then(function (stream) {
+                        MediaStreamTrack = typeof stream.stop === 'function' ? stream : stream.getTracks()[1];
+                        video.srcObject = stream;
+                        video.play();
+
+                    }).catch(function (err) {
+                        console.log(err);
+                    });
+                }
+            });
+            snap.addEventListener('click', function () {
+                setInterval(function () {
+                    try {
+                        context.drawImage(video, 0, 0);
+                        detect();
+                    }
+                    catch (ex) {
+                        console.log(ex);
+                    }
+                }, 50);
+            });
+            close.addEventListener('click', function () {
+                MediaStreamTrack && MediaStreamTrack.stop();
+            });
+        }
+
+    </script>
+</body>
+
+</html>

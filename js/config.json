@@ -1,0 +1,332 @@
+{
+    "tiger": [
+        {
+            "des": "head",
+            "images": ["Lingoace/visualpics/tiger/head/head.png"],
+            "interval": -1,
+            "is_fixed": false,
+            "scale": 1.0,
+            "pos_fixed": [
+                0,
+                0
+            ],
+            "reference_line": [
+                51,
+                54
+            ],
+            "reference_point": 51,
+            "reference_length": [
+                60,
+                72
+            ],
+            "reference_scale": 2,
+            "reference_offsetx": 0,
+            "reference_offsety": 1.0,
+            "absolute_offsetx": 0,
+            "absolute_offsety": 0,
+            "absolute_rotate": 0
+        }
+    ],
+    "mouse": [
+        {
+            "des": "whisker",
+            "images": ["Lingoace/visualpics/mouse/whisker/whisker.png"],
+            "interval": -1,
+            "is_fixed": false,
+            "scale": 1.0,
+            "pos_fixed": [
+                0,
+                0
+            ],
+            "reference_line": [
+                54,
+                51
+            ],
+            "reference_point": 54,
+            "reference_length": [
+                60,
+                72
+            ],
+            "reference_scale": 2,
+            "reference_offsetx": 0,
+            "reference_offsety": 0,
+            "absolute_offsetx": 0,
+            "absolute_offsety": 0,
+            "absolute_rotate": 0
+        }
+    ],
+    "deer": [
+        {
+            "des": "buckhorn",
+            "images": ["Lingoace/visualpics/deer/buckhorn/buckhorn.png"],
+            "interval": -1,
+            "is_fixed": false,
+            "scale": 1.0,
+            "pos_fixed": [
+                0,
+                0
+            ],
+            "reference_line": [
+                54,
+                51
+            ],
+            "reference_point": 54,
+            "reference_length": [
+                60,
+                72
+            ],
+            "reference_scale": 2.5,
+            "reference_offsetx": 0,
+            "reference_offsety": 1.5,
+            "absolute_offsetx": 0,
+            "absolute_offsety": 0,
+            "absolute_rotate": 0
+        },
+        {
+            "des": "nose",
+            "images": ["Lingoace/visualpics/deer/nose/nose.png"],
+            "interval": -1,
+            "is_fixed": false,
+            "scale": 1.0,
+            "pos_fixed": [
+                0,
+                0
+            ],
+            "reference_line": [
+                54,
+                51
+            ],
+            "reference_point": 54,
+            "reference_length": [
+                60,
+                72
+            ],
+            "reference_scale": 2,
+            "reference_offsetx": 0,
+            "reference_offsety": 0,
+            "absolute_offsetx": 0,
+            "absolute_offsety": 0,
+            "absolute_rotate": 0
+        }
+    ],
+    "daviddeer": [
+        {
+            "des": "buckhorn",
+            "images": ["Lingoace/visualpics/daviddeer/buckhorn/buckhorn.png"],
+            "interval": -1,
+            "is_fixed": false,
+            "scale": 1.0,
+            "pos_fixed": [
+                0,
+                0
+            ],
+            "reference_line": [
+                54,
+                51
+            ],
+            "reference_point": 54,
+            "reference_length": [
+                60,
+                72
+            ],
+            "reference_scale": 2.2,
+            "reference_offsetx": 0,
+            "reference_offsety": 1.5,
+            "absolute_offsetx": 0,
+            "absolute_offsety": 0,
+            "absolute_rotate": 0
+        },
+        {
+            "des": "nose",
+            "images": ["Lingoace/visualpics/daviddeer/nose/nose.png"],
+            "interval": -1,
+            "is_fixed": false,
+            "scale": 1.0,
+            "pos_fixed": [
+                0,
+                0
+            ],
+            "reference_line": [
+                54,
+                51
+            ],
+            "reference_point": 54,
+            "reference_length": [
+                60,
+                72
+            ],
+            "reference_scale": 0.4,
+            "reference_offsetx": 0,
+            "reference_offsety": 0,
+            "absolute_offsetx": 0,
+            "absolute_offsety": 0,
+            "absolute_rotate": 0
+        }
+    ],
+    "cattle": [
+        {
+            "des": "head",
+            "images": ["Lingoace/visualpics/cattle/head/head.png"],
+            "interval": -1,
+            "is_fixed": false,
+            "scale": 1.0,
+            "pos_fixed": [
+                0,
+                0
+            ],
+            "reference_line": [
+                51,
+                54
+            ],
+            "reference_point": 51,
+            "reference_length": [
+                60,
+                72
+            ],
+            "reference_scale": 3.5,
+            "reference_offsetx": 0,
+            "reference_offsety": 0.6,
+            "absolute_offsetx": 0,
+            "absolute_offsety": 0,
+            "absolute_rotate": 0
+        }
+    ],
+    "yellowduck": [
+        {
+            "des": "head",
+            "images": ["Lingoace/visualpics/yellowduck/head/head.png"],
+            "interval": -1,
+            "is_fixed": false,
+            "scale": 1.0,
+            "pos_fixed": [
+                0,
+                0
+            ],
+            "reference_line": [
+                51,
+                54
+            ],
+            "reference_point": 51,
+            "reference_length": [
+                60,
+                72
+            ],
+            "reference_scale": 2,
+            "reference_offsetx": 0,
+            "reference_offsety": 1.0,
+            "absolute_offsetx": 0,
+            "absolute_offsety": 0,
+            "absolute_rotate": 0
+        }
+    ],
+    "rabit": [
+        {
+            "des": "head",
+            "images": ["Lingoace/visualpics/rabit/head/head.png"],
+            "interval": -1,
+            "is_fixed": false,
+            "scale": 1.0,
+            "pos_fixed": [
+                0,
+                0
+            ],
+            "reference_line": [
+                51,
+                54
+            ],
+            "reference_point": 51,
+            "reference_length": [
+                60,
+                72
+            ],
+            "reference_scale": 2,
+            "reference_offsetx": 0,
+            "reference_offsety": 1.9,
+            "absolute_offsetx": 0,
+            "absolute_offsety": 0,
+            "absolute_rotate": 0
+        }
+    ],
+    "fawn": [
+        {
+            "des": "head",
+            "images": ["Lingoace/visualpics/fawn/head/head.png"],
+            "interval": -1,
+            "is_fixed": false,
+            "scale": 1.0,
+            "pos_fixed": [
+                0,
+                0
+            ],
+            "reference_line": [
+                54,
+                51
+            ],
+            "reference_point": 54,
+            "reference_length": [
+                60,
+                72
+            ],
+            "reference_scale": 2.2,
+            "reference_offsetx": 0,
+            "reference_offsety": 1.6,
+            "absolute_offsetx": 0,
+            "absolute_offsety": 0,
+            "absolute_rotate": 0
+        },
+        {
+            "des": "nose",
+            "images": ["Lingoace/visualpics/fawn/nose/nose.png"],
+            "interval": -1,
+            "is_fixed": false,
+            "scale": 1.0,
+            "pos_fixed": [
+                0,
+                0
+            ],
+            "reference_line": [
+                54,
+                51
+            ],
+            "reference_point": 54,
+            "reference_length": [
+                60,
+                72
+            ],
+            "reference_scale": 1.8,
+            "reference_offsetx": 0,
+            "reference_offsety": 0,
+            "absolute_offsetx": 0,
+            "absolute_offsety": 0,
+            "absolute_rotate": 0
+        }
+    ],
+    "switch": [
+        {
+            "des": "head",
+            "images": ["Lingoace/visualpics/rabit/head/head.png","Lingoace/visualpics/deer/buckhorn/buckhorn.png"],
+            "interval": 3,
+            "is_fixed": false,
+            "scale": 1.0,
+            "pos_fixed": [
+                0,
+                0
+            ],
+            "reference_line": [
+                51,
+                54
+            ],
+            "reference_point": 51,
+            "reference_length": [
+                60,
+                72
+            ],
+            "reference_scale": 2,
+            "reference_offsetx": 0,
+            "reference_offsety": 1.0,
+            "absolute_offsetx": 0,
+            "absolute_offsety": 0,
+            "absolute_rotate": 0
+        }
+    ]
+}
